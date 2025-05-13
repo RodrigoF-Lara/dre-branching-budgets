@@ -1,36 +1,39 @@
-
 import React, { useState } from 'react';
 import { BudgetItem as BudgetItemType } from '../types/budget';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { cn } from '@/lib/utils';
-import { ChevronDown, ChevronRight, Grip, Plus, Trash } from 'lucide-react';
+import { ChevronDown, ChevronRight, Grip, Plus, Trash, ArrowDown, ArrowUp } from 'lucide-react';
 import { useDrag, useDrop } from 'react-dnd';
+import { TableRow, TableCell } from './ui/table';
 
 interface BudgetItemProps {
   item: BudgetItemType;
   level: number;
-  onAddChild: (parentId: string) => void;
+  months: string[];
+  onAddChild: (parentId: string, isNegative: boolean) => void;
   onDelete: (id: string) => void;
   onUpdateName: (id: string, name: string) => void;
-  onUpdateValue: (id: string, value: number) => void;
+  onUpdateMonthlyValue: (id: string, month: string, value: number) => void;
   onToggleExpand: (id: string) => void;
+  onToggleNegative: (id: string) => void;
   onMoveBudgetItem: (dragId: string, hoverId: string) => void;
 }
 
 export const BudgetItem: React.FC<BudgetItemProps> = ({
   item,
   level,
+  months,
   onAddChild,
   onDelete,
   onUpdateName,
-  onUpdateValue,
+  onUpdateMonthlyValue,
   onToggleExpand,
+  onToggleNegative,
   onMoveBudgetItem
 }) => {
   const [isEditing, setIsEditing] = useState(false);
   const [nameValue, setNameValue] = useState(item.name);
-  const [valueInput, setValueInput] = useState(item.value.toString());
   
   const hasChildren = item.children.length > 0;
   const indentation = level * 20; // 20px per level of indentation
@@ -63,136 +66,181 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
     }
   };
 
-  const handleValueBlur = () => {
-    const numValue = parseFloat(valueInput);
-    if (!isNaN(numValue) && numValue !== item.value) {
-      onUpdateValue(item.id, numValue);
-    } else {
-      setValueInput(item.value.toString());
+  const handleValueChange = (month: string, e: React.ChangeEvent<HTMLInputElement>) => {
+    const numValue = parseFloat(e.target.value);
+    if (!isNaN(numValue)) {
+      onUpdateMonthlyValue(item.id, month, numValue);
     }
   };
 
-  const totalValue = item.value + item.children.reduce((sum, child) => {
-    // Recursive function to calculate total including all descendants
-    const calculateTotal = (item: BudgetItemType): number => {
-      return item.value + item.children.reduce((sum, child) => sum + calculateTotal(child), 0);
-    };
+  // Calculate total for this item including children
+  const calculateItemTotal = (item: BudgetItemType, month?: string): number => {
+    // If month is specified, calculate for that month
+    if (month) {
+      const thisItemValue = item.values[month] || 0;
+      const childrenValues = item.children.reduce((sum, child) => {
+        return sum + calculateItemTotal(child, month);
+      }, 0);
+      return thisItemValue + childrenValues;
+    }
     
-    return sum + calculateTotal(child);
-  }, 0);
+    // Otherwise calculate total across all months
+    const thisItemTotal = item.values.total || 0;
+    const childrenTotal = item.children.reduce((sum, child) => {
+      return sum + (child.values.total || 0) + child.children.reduce((s, grandchild) => {
+        return s + calculateItemTotal(grandchild);
+      }, 0);
+    }, 0);
+    return thisItemTotal + childrenTotal;
+  };
+
+  // Get the sign indicator based on isNegative flag
+  const signIndicator = item.isNegative ? (
+    <ArrowDown size={16} className="text-red-500" />
+  ) : (
+    <ArrowUp size={16} className="text-green-500" />
+  );
 
   return (
-    <div 
-      ref={drop} 
-      className={cn(
-        "animate-fade-in",
-        isOver ? "bg-budget-light bg-opacity-20" : ""
-      )}
-    >
-      <div 
-        ref={dragPreview}
+    <>
+      <TableRow 
+        ref={drop} 
         className={cn(
-          "flex items-center py-2 border-b border-gray-200 transition-all",
-          isDragging ? "opacity-50" : "",
-          isOver ? "bg-budget-light bg-opacity-20" : ""
+          "animate-fade-in transition-all",
+          isOver ? "bg-budget-light bg-opacity-20" : "",
+          isDragging ? "opacity-50" : ""
         )}
-        style={{ marginLeft: `${indentation}px` }}
       >
-        <div 
-          ref={drag}
-          className="cursor-move mr-2 text-gray-400 hover:text-gray-700"
-        >
-          <Grip size={16} />
-        </div>
-        
-        <button 
-          onClick={() => onToggleExpand(item.id)}
-          className="mr-2 text-gray-500"
-        >
-          {hasChildren ? (
-            item.isExpanded ? (
-              <ChevronDown size={18} />
-            ) : (
-              <ChevronRight size={18} />
-            )
-          ) : (
-            <div className="w-[18px]"></div>
-          )}
-        </button>
-        
-        <div className="font-medium text-gray-700 mr-2 min-w-[80px]">
-          {item.code}
-        </div>
-        
-        {isEditing ? (
-          <Input
-            value={nameValue}
-            onChange={(e) => setNameValue(e.target.value)}
-            onBlur={handleNameBlur}
-            onKeyDown={(e) => e.key === 'Enter' && handleNameBlur()}
-            className="mr-auto"
-            autoFocus
-          />
-        ) : (
+        <TableCell className="p-2">
           <div 
-            onClick={() => setIsEditing(true)}
-            className="mr-auto cursor-pointer hover:text-budget"
+            className="flex items-center"
+            style={{ paddingLeft: `${indentation}px` }}
           >
-            {item.name}
-          </div>
-        )}
-        
-        <div className="flex items-center ml-4 space-x-2">
-          <Input
-            type="number"
-            value={valueInput}
-            onChange={(e) => setValueInput(e.target.value)}
-            onBlur={handleValueBlur}
-            onKeyDown={(e) => e.key === 'Enter' && handleValueBlur()}
-            className="w-28 text-right"
-          />
-          
-          {hasChildren && (
-            <div className="text-gray-500 w-28 text-right">
-              Total: {totalValue.toLocaleString('pt-BR', { 
-                style: 'currency', 
-                currency: 'BRL' 
-              })}
+            <div 
+              ref={drag}
+              className="cursor-move mr-2 text-gray-400 hover:text-gray-700"
+            >
+              <Grip size={16} />
             </div>
-          )}
-          
-          <Button 
-            size="icon" 
-            variant="ghost"
-            onClick={() => onAddChild(item.id)}
-          >
-            <Plus size={16} />
-          </Button>
-          
-          <Button 
-            size="icon" 
-            variant="ghost" 
-            onClick={() => onDelete(item.id)}
-            className="text-red-500 hover:text-red-700"
-          >
-            <Trash size={16} />
-          </Button>
-        </div>
-      </div>
+            
+            <button 
+              onClick={() => onToggleExpand(item.id)}
+              className="mr-2 text-gray-500"
+            >
+              {hasChildren ? (
+                item.isExpanded ? (
+                  <ChevronDown size={18} />
+                ) : (
+                  <ChevronRight size={18} />
+                )
+              ) : (
+                <div className="w-[18px]"></div>
+              )}
+            </button>
+            
+            <div className="font-medium text-gray-700 mr-2 min-w-[60px]">
+              {item.code}
+            </div>
+            
+            <button 
+              onClick={() => onToggleNegative(item.id)}
+              className="mr-2"
+              title={item.isNegative ? "Despesa (clique para alterar)" : "Receita (clique para alterar)"}
+            >
+              {signIndicator}
+            </button>
+            
+            {isEditing ? (
+              <Input
+                value={nameValue}
+                onChange={(e) => setNameValue(e.target.value)}
+                onBlur={handleNameBlur}
+                onKeyDown={(e) => e.key === 'Enter' && handleNameBlur()}
+                className="mr-auto"
+                autoFocus
+              />
+            ) : (
+              <div 
+                onClick={() => setIsEditing(true)}
+                className="cursor-pointer hover:text-budget truncate max-w-[400px]"
+              >
+                {item.name}
+              </div>
+            )}
+          </div>
+        </TableCell>
+        
+        {/* Monthly value inputs */}
+        {months.map(month => (
+          <TableCell key={month} className="p-1">
+            <Input
+              type="number"
+              value={item.values[month] || ''}
+              onChange={(e) => handleValueChange(month, e)}
+              className="text-right px-1 py-1 h-8"
+            />
+          </TableCell>
+        ))}
+        
+        {/* Total column */}
+        <TableCell className="p-2 text-right font-medium">
+          {calculateItemTotal(item).toLocaleString('pt-BR', { 
+            style: 'currency', 
+            currency: 'BRL' 
+          })}
+        </TableCell>
+        
+        {/* Actions column */}
+        <TableCell className="p-1">
+          <div className="flex items-center space-x-1">
+            <Button 
+              size="icon" 
+              variant="ghost"
+              onClick={() => onAddChild(item.id, false)}
+              title="Adicionar receita"
+              className="h-7 w-7 text-green-600"
+            >
+              <Plus size={16} />
+            </Button>
+            
+            <Button 
+              size="icon" 
+              variant="ghost"
+              onClick={() => onAddChild(item.id, true)}
+              title="Adicionar despesa"
+              className="h-7 w-7 text-red-600"
+            >
+              <Plus size={16} />
+            </Button>
+            
+            <Button 
+              size="icon" 
+              variant="ghost" 
+              onClick={() => onDelete(item.id)}
+              className="h-7 w-7 text-red-500 hover:text-red-700"
+            >
+              <Trash size={16} />
+            </Button>
+          </div>
+        </TableCell>
+      </TableRow>
       
+      {/* Render children */}
       {item.isExpanded && item.children.map((child) => (
         <BudgetItem
           key={child.id}
           item={child}
           level={level + 1}
+          months={months}
           onAddChild={onAddChild}
           onDelete={onDelete}
           onUpdateName={onUpdateName}
-          onUpdateValue={onUpdateValue}
+          onUpdateMonthlyValue={onUpdateMonthlyValue}
           onToggleExpand={onToggleExpand}
+          onToggleNegative={onToggleNegative}
           onMoveBudgetItem={onMoveBudgetItem}
         />
       ))}
-    </div>
+    </>
   );
 };

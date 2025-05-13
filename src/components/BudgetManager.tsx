@@ -1,18 +1,38 @@
 
-import React, { useState } from 'react';
-import { BudgetItem as BudgetItemType } from '../types/budget';
+import React, { useState, useEffect } from 'react';
+import { BudgetItem as BudgetItemType, SubtotalConfig, MonthlyValues } from '../types/budget';
 import { BudgetItem } from './BudgetItem';
+import { SubtotalRow } from './SubtotalRow';
 import { Button } from './ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
 import { toast } from '@/components/ui/use-toast';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import { Plus } from 'lucide-react';
+import { Plus, Combine } from 'lucide-react';
+import { Table, TableHeader, TableRow, TableHead, TableBody } from './ui/table';
+import { MonthHeader } from './MonthHeader';
+import { AddSubtotalDialog } from './AddSubtotalDialog';
+
+const months = [
+  'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 
+  'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'
+];
 
 const BudgetManager: React.FC = () => {
   const [budget, setBudget] = useState<BudgetItemType[]>([]);
   const [nextId, setNextId] = useState(1);
   const [nextCode, setNextCode] = useState(1);
+  const [subtotals, setSubtotals] = useState<SubtotalConfig[]>([]);
+  const [showSubtotalDialog, setShowSubtotalDialog] = useState(false);
+
+  // Initialize empty monthly values
+  const initializeMonthlyValues = (): MonthlyValues => {
+    const values: MonthlyValues = { total: 0 };
+    months.forEach(month => {
+      values[month] = 0;
+    });
+    return values;
+  };
 
   const generateNewCode = (parentCode?: string): string => {
     if (parentCode) {
@@ -56,15 +76,16 @@ const BudgetManager: React.FC = () => {
     return results;
   };
 
-  const addRootItem = () => {
+  const addRootItem = (isNegative: boolean = false) => {
     const newCode = generateNewCode();
     const newItem: BudgetItemType = {
       id: `item-${nextId}`,
       code: newCode,
       name: `Item ${newCode}`,
-      value: 0,
+      values: initializeMonthlyValues(),
       children: [],
       isExpanded: true,
+      isNegative: isNegative
     };
     
     setBudget([...budget, newItem]);
@@ -75,7 +96,7 @@ const BudgetManager: React.FC = () => {
     });
   };
 
-  const addChildItem = (parentId: string) => {
+  const addChildItem = (parentId: string, isNegative: boolean = false) => {
     const newBudget = [...budget];
     
     const addChildToItem = (items: BudgetItemType[], parentId: string): boolean => {
@@ -88,9 +109,10 @@ const BudgetManager: React.FC = () => {
             id: `item-${nextId}`,
             code: newCode,
             name: `Item ${newCode}`,
-            value: 0,
+            values: initializeMonthlyValues(),
             children: [],
             isExpanded: true,
+            isNegative: isNegative
           };
           
           items[i].children.push(newChild);
@@ -128,6 +150,13 @@ const BudgetManager: React.FC = () => {
             title: "Item removido",
             description: `"${item.name}" foi removido do orçamento.`
           });
+          
+          // Also remove from any subtotals
+          setSubtotals(prevSubtotals => prevSubtotals.map(st => ({
+            ...st,
+            accountIds: st.accountIds.filter(id => id !== itemId)
+          })));
+          
           return false;
         }
         
@@ -165,18 +194,27 @@ const BudgetManager: React.FC = () => {
     setBudget(newBudget);
   };
 
-  const updateItemValue = (itemId: string, newValue: number) => {
+  const updateItemMonthlyValue = (itemId: string, month: string, newValue: number) => {
     const newBudget = [...budget];
     
-    const updateValueInItems = (items: BudgetItemType[], itemId: string, newValue: number): boolean => {
+    const updateValueInItems = (items: BudgetItemType[], itemId: string, month: string, newValue: number): boolean => {
       for (let i = 0; i < items.length; i++) {
         if (items[i].id === itemId) {
-          items[i].value = newValue;
+          // Update the specific month
+          items[i].values[month] = newValue;
+          
+          // Recalculate the total
+          let total = 0;
+          months.forEach(m => {
+            total += items[i].values[m] || 0;
+          });
+          items[i].values.total = total;
+          
           return true;
         }
         
         if (items[i].children.length > 0) {
-          const updated = updateValueInItems(items[i].children, itemId, newValue);
+          const updated = updateValueInItems(items[i].children, itemId, month, newValue);
           if (updated) return true;
         }
       }
@@ -184,7 +222,7 @@ const BudgetManager: React.FC = () => {
       return false;
     };
     
-    updateValueInItems(newBudget, itemId, newValue);
+    updateValueInItems(newBudget, itemId, month, newValue);
     setBudget(newBudget);
   };
 
@@ -208,6 +246,29 @@ const BudgetManager: React.FC = () => {
     };
     
     toggleInItems(newBudget, itemId);
+    setBudget(newBudget);
+  };
+
+  const toggleItemNegative = (itemId: string) => {
+    const newBudget = [...budget];
+    
+    const toggleNegativeInItems = (items: BudgetItemType[], itemId: string): boolean => {
+      for (let i = 0; i < items.length; i++) {
+        if (items[i].id === itemId) {
+          items[i].isNegative = !items[i].isNegative;
+          return true;
+        }
+        
+        if (items[i].children.length > 0) {
+          const toggled = toggleNegativeInItems(items[i].children, itemId);
+          if (toggled) return true;
+        }
+      }
+      
+      return false;
+    };
+    
+    toggleNegativeInItems(newBudget, itemId);
     setBudget(newBudget);
   };
 
@@ -312,60 +373,260 @@ const BudgetManager: React.FC = () => {
     setBudget([...newBudget]);
   };
 
-  // Calculate total budget
-  const totalBudget = budget.reduce((sum, item) => {
-    const calculateTotal = (item: BudgetItemType): number => {
-      return item.value + item.children.reduce((sum, child) => sum + calculateTotal(child), 0);
+  // Function to find a budget item by ID
+  const findItemById = (itemId: string, items: BudgetItemType[] = budget): BudgetItemType | null => {
+    for (const item of items) {
+      if (item.id === itemId) {
+        return item;
+      }
+      
+      if (item.children.length > 0) {
+        const foundItem = findItemById(itemId, item.children);
+        if (foundItem) return foundItem;
+      }
+    }
+    
+    return null;
+  };
+
+  // Function to add a new subtotal configuration
+  const addSubtotal = (name: string, accountIds: string[]) => {
+    const newSubtotal: SubtotalConfig = {
+      id: `subtotal-${Date.now()}`,
+      name,
+      accountIds,
+      isVisible: true
     };
     
-    return sum + calculateTotal(item);
-  }, 0);
+    setSubtotals([...subtotals, newSubtotal]);
+    toast({
+      title: "Subtotal criado",
+      description: `O subtotal "${name}" foi adicionado ao orçamento.`
+    });
+  };
+
+  // Function to toggle subtotal visibility
+  const toggleSubtotalVisibility = (subtotalId: string) => {
+    setSubtotals(prevSubtotals => 
+      prevSubtotals.map(st => 
+        st.id === subtotalId ? { ...st, isVisible: !st.isVisible } : st
+      )
+    );
+  };
+
+  // Function to delete a subtotal
+  const deleteSubtotal = (subtotalId: string) => {
+    setSubtotals(prevSubtotals => prevSubtotals.filter(st => st.id !== subtotalId));
+    toast({
+      title: "Subtotal removido",
+      description: `O subtotal foi removido do orçamento.`
+    });
+  };
+
+  // Calculate subtotal value
+  const calculateSubtotal = (subtotal: SubtotalConfig, month?: string): number => {
+    return subtotal.accountIds.reduce((sum, accountId) => {
+      const item = findItemById(accountId);
+      if (!item) return sum;
+      
+      const value = month ? item.values[month] || 0 : (item.values.total || 0);
+      return sum + (item.isNegative ? -value : value);
+    }, 0);
+  };
+
+  // Calculate total budget for all months
+  const calculateBudgetTotals = () => {
+    const totals: MonthlyValues = { total: 0 };
+    
+    // Initialize with zeros
+    months.forEach(month => {
+      totals[month] = 0;
+    });
+    
+    const calculateItemTotals = (item: BudgetItemType): MonthlyValues => {
+      const result: MonthlyValues = { total: 0 };
+      
+      // Initialize with zeros
+      months.forEach(month => {
+        result[month] = 0;
+      });
+      
+      // Add this item's values
+      months.forEach(month => {
+        const value = item.values[month] || 0;
+        result[month] = value;
+      });
+      
+      // Add child values
+      item.children.forEach(child => {
+        const childTotals = calculateItemTotals(child);
+        months.forEach(month => {
+          result[month] += childTotals[month];
+        });
+        result.total = (result.total || 0) + (childTotals.total || 0);
+      });
+      
+      // Calculate total for this item
+      let itemTotal = 0;
+      months.forEach(month => {
+        itemTotal += result[month];
+      });
+      result.total = itemTotal;
+      
+      return result;
+    };
+    
+    // Calculate for each top-level item
+    budget.forEach(item => {
+      const itemTotals = calculateItemTotals(item);
+      
+      // Apply positive/negative factor
+      const factor = item.isNegative ? -1 : 1;
+      
+      months.forEach(month => {
+        totals[month] = (totals[month] || 0) + factor * itemTotals[month];
+      });
+      
+      totals.total = (totals.total || 0) + factor * (itemTotals.total || 0);
+    });
+    
+    return totals;
+  };
+
+  // Get the budget totals
+  const budgetTotals = calculateBudgetTotals();
 
   return (
     <DndProvider backend={HTML5Backend}>
       <Card className="w-full">
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Gerenciador de Orçamento DRE</CardTitle>
-          <Button onClick={addRootItem} className="bg-budget hover:bg-budget-hover">
-            <Plus size={16} className="mr-2" />
-            Adicionar Conta Principal
-          </Button>
+          <div className="flex space-x-2">
+            <Button 
+              onClick={() => addRootItem(false)}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              <Plus size={16} className="mr-2" />
+              Adicionar Receita
+            </Button>
+            
+            <Button 
+              onClick={() => addRootItem(true)}
+              className="bg-red-600 hover:bg-red-700"
+            >
+              <Plus size={16} className="mr-2" />
+              Adicionar Despesa
+            </Button>
+            
+            <Button 
+              onClick={() => setShowSubtotalDialog(true)}
+              variant="outline"
+            >
+              <Combine size={16} className="mr-2" />
+              Adicionar Subtotal
+            </Button>
+          </div>
         </CardHeader>
         
         <CardContent>
           <div className="mb-4 flex justify-between items-center p-2 bg-gray-50 rounded">
             <div className="font-semibold">Estrutura do DRE</div>
             <div className="text-xl font-bold">
-              Total: {totalBudget.toLocaleString('pt-BR', { 
+              Total Anual: {budgetTotals.total?.toLocaleString('pt-BR', { 
                 style: 'currency', 
                 currency: 'BRL' 
               })}
             </div>
           </div>
           
-          <div className="budget-list">
-            {budget.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                Clique no botão "Adicionar Conta Principal" para começar seu orçamento
-              </div>
-            ) : (
-              budget.map((item) => (
-                <BudgetItem
-                  key={item.id}
-                  item={item}
-                  level={0}
-                  onAddChild={addChildItem}
-                  onDelete={deleteItem}
-                  onUpdateName={updateItemName}
-                  onUpdateValue={updateItemValue}
-                  onToggleExpand={toggleExpandItem}
-                  onMoveBudgetItem={moveBudgetItem}
-                />
-              ))
-            )}
+          <div className="budget-table-container overflow-x-auto">
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-1/4">Conta</TableHead>
+                  {months.map(month => (
+                    <TableHead key={month} className="min-w-[100px]">
+                      {month}
+                    </TableHead>
+                  ))}
+                  <TableHead className="min-w-[120px]">Total Ano</TableHead>
+                  <TableHead className="w-[120px]">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              
+              <TableBody>
+                {budget.length === 0 ? (
+                  <TableRow>
+                    <td colSpan={months.length + 3} className="text-center py-8 text-gray-500">
+                      Clique nos botões "Adicionar Receita" ou "Adicionar Despesa" para começar seu orçamento
+                    </td>
+                  </TableRow>
+                ) : (
+                  <>
+                    {budget.map((item) => (
+                      <BudgetItem
+                        key={item.id}
+                        item={item}
+                        level={0}
+                        months={months}
+                        onAddChild={addChildItem}
+                        onDelete={deleteItem}
+                        onUpdateName={updateItemName}
+                        onUpdateMonthlyValue={updateItemMonthlyValue}
+                        onToggleExpand={toggleExpandItem}
+                        onToggleNegative={toggleItemNegative}
+                        onMoveBudgetItem={moveBudgetItem}
+                      />
+                    ))}
+                    
+                    {/* Render subtotal rows */}
+                    {subtotals.filter(st => st.isVisible).map(subtotal => (
+                      <SubtotalRow
+                        key={subtotal.id}
+                        subtotal={subtotal}
+                        months={months}
+                        calculateValue={(month) => calculateSubtotal(subtotal, month)}
+                        totalValue={calculateSubtotal(subtotal)}
+                        onToggleVisibility={() => toggleSubtotalVisibility(subtotal.id)}
+                        onDelete={() => deleteSubtotal(subtotal.id)}
+                      />
+                    ))}
+                    
+                    {/* Total row */}
+                    <TableRow className="font-bold bg-gray-100">
+                      <td className="p-2">TOTAL</td>
+                      {months.map(month => (
+                        <td key={month} className="p-2 text-right">
+                          {budgetTotals[month]?.toLocaleString('pt-BR', { 
+                            style: 'currency', 
+                            currency: 'BRL' 
+                          })}
+                        </td>
+                      ))}
+                      <td className="p-2 text-right">
+                        {budgetTotals.total?.toLocaleString('pt-BR', { 
+                          style: 'currency', 
+                          currency: 'BRL' 
+                        })}
+                      </td>
+                      <td className="p-2"></td>
+                    </TableRow>
+                  </>
+                )}
+              </TableBody>
+            </Table>
           </div>
         </CardContent>
       </Card>
+      
+      {/* Dialog for adding subtotals */}
+      {showSubtotalDialog && (
+        <AddSubtotalDialog
+          budget={budget}
+          onAddSubtotal={addSubtotal}
+          onClose={() => setShowSubtotalDialog(false)}
+        />
+      )}
     </DndProvider>
   );
 };
