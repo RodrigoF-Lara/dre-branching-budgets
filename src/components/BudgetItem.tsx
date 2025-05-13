@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { BudgetItem as BudgetItemType } from '../types/budget';
 import { Button } from './ui/button';
@@ -73,27 +74,6 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
     }
   };
 
-  // Calculate total for this item including children
-  const calculateItemTotal = (item: BudgetItemType, month?: string): number => {
-    // If month is specified, calculate for that month
-    if (month) {
-      const thisItemValue = item.values[month] || 0;
-      const childrenValues = item.children.reduce((sum, child) => {
-        return sum + calculateItemTotal(child, month);
-      }, 0);
-      return thisItemValue + childrenValues;
-    }
-    
-    // Otherwise calculate total across all months
-    const thisItemTotal = item.values.total || 0;
-    const childrenTotal = item.children.reduce((sum, child) => {
-      return sum + (child.values.total || 0) + child.children.reduce((s, grandchild) => {
-        return s + calculateItemTotal(grandchild);
-      }, 0);
-    }, 0);
-    return thisItemTotal + childrenTotal;
-  };
-
   // Get the sign indicator based on isNegative flag
   const signIndicator = item.isNegative ? (
     <ArrowDown size={16} className="text-red-500" />
@@ -108,7 +88,8 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         className={cn(
           "animate-fade-in transition-all",
           isOver ? "bg-budget-light bg-opacity-20" : "",
-          isDragging ? "opacity-50" : ""
+          isDragging ? "opacity-50" : "",
+          hasChildren ? "font-semibold" : ""
         )}
       >
         <TableCell className="p-2">
@@ -116,6 +97,29 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
             className="flex items-center"
             style={{ paddingLeft: `${indentation}px` }}
           >
+            {/* Adicionar botões no início da linha */}
+            <div className="flex items-center space-x-1 mr-2">
+              <Button 
+                size="icon" 
+                variant="ghost"
+                onClick={() => onAddChild(item.id, false)}
+                title="Adicionar receita"
+                className="h-6 w-6 text-green-600 border border-green-300"
+              >
+                <Plus size={14} />
+              </Button>
+              
+              <Button 
+                size="icon" 
+                variant="ghost"
+                onClick={() => onAddChild(item.id, true)}
+                title="Adicionar despesa"
+                className="h-6 w-6 text-red-600 border border-red-300"
+              >
+                <Plus size={14} />
+              </Button>
+            </div>
+            
             <div 
               ref={drag}
               className="cursor-move mr-2 text-gray-400 hover:text-gray-700"
@@ -170,21 +174,30 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
           </div>
         </TableCell>
         
-        {/* Monthly value inputs */}
+        {/* Monthly value inputs - somente editáveis se não tiver filhos */}
         {months.map(month => (
           <TableCell key={month} className="p-1">
-            <Input
-              type="number"
-              value={item.values[month] || ''}
-              onChange={(e) => handleValueChange(month, e)}
-              className="text-right px-1 py-1 h-8"
-            />
+            {hasChildren ? (
+              <div className="text-right px-2">
+                {(item.values[month] || 0).toLocaleString('pt-BR', { 
+                  style: 'currency', 
+                  currency: 'BRL' 
+                })}
+              </div>
+            ) : (
+              <Input
+                type="number"
+                value={item.values[month] || ''}
+                onChange={(e) => handleValueChange(month, e)}
+                className="text-right px-1 py-1 h-8"
+              />
+            )}
           </TableCell>
         ))}
         
         {/* Total column */}
         <TableCell className="p-2 text-right font-medium">
-          {calculateItemTotal(item).toLocaleString('pt-BR', { 
+          {(item.values.total || 0).toLocaleString('pt-BR', { 
             style: 'currency', 
             currency: 'BRL' 
           })}
@@ -192,27 +205,7 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         
         {/* Actions column */}
         <TableCell className="p-1">
-          <div className="flex items-center space-x-1">
-            <Button 
-              size="icon" 
-              variant="ghost"
-              onClick={() => onAddChild(item.id, false)}
-              title="Adicionar receita"
-              className="h-7 w-7 text-green-600"
-            >
-              <Plus size={16} />
-            </Button>
-            
-            <Button 
-              size="icon" 
-              variant="ghost"
-              onClick={() => onAddChild(item.id, true)}
-              title="Adicionar despesa"
-              className="h-7 w-7 text-red-600"
-            >
-              <Plus size={16} />
-            </Button>
-            
+          <div className="flex items-center justify-end">
             <Button 
               size="icon" 
               variant="ghost" 

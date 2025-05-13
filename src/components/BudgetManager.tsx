@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BudgetItem as BudgetItemType, SubtotalConfig, MonthlyValues } from '../types/budget';
 import { BudgetItem } from './BudgetItem';
@@ -33,6 +32,55 @@ const BudgetManager: React.FC = () => {
     });
     return values;
   };
+
+  // Efeito para recalcular os valores das contas pai quando os filhos mudam
+  useEffect(() => {
+    const newBudget = [...budget];
+    
+    // Função para calcular valores de pais com base nos filhos
+    const updateParentValues = (items: BudgetItemType[]): void => {
+      for (const item of items) {
+        if (item.children.length > 0) {
+          // Primeiro atualiza valores dos filhos recursivamente
+          updateParentValues(item.children);
+          
+          // Depois atualiza o pai com base nos valores dos filhos atualizados
+          const newValues: MonthlyValues = { total: 0 };
+          
+          // Inicializa com zeros
+          months.forEach(month => {
+            newValues[month] = 0;
+          });
+          
+          // Soma os valores dos filhos
+          item.children.forEach(child => {
+            months.forEach(month => {
+              // Aplicar o sinal positivo ou negativo de acordo com isNegative
+              const childValue = child.values[month] || 0;
+              const valueWithSign = child.isNegative ? -childValue : childValue;
+              newValues[month] = (newValues[month] || 0) + valueWithSign;
+            });
+          });
+          
+          // Calcula o total
+          let total = 0;
+          months.forEach(month => {
+            total += newValues[month] || 0;
+          });
+          newValues.total = total;
+          
+          // Atualiza valores do item pai
+          // Importante: não sobreescreve valores de contas pai sem filhos
+          if (item.children.length > 0) {
+            item.values = newValues;
+          }
+        }
+      }
+    };
+    
+    updateParentValues(newBudget);
+    setBudget(newBudget);
+  }, [budget]);
 
   const generateNewCode = (parentCode?: string): string => {
     if (parentCode) {
@@ -542,16 +590,7 @@ const BudgetManager: React.FC = () => {
           <div className="budget-table-container overflow-x-auto">
             <Table className="w-full">
               <TableHeader>
-                <TableRow>
-                  <TableHead className="w-1/4">Conta</TableHead>
-                  {months.map(month => (
-                    <TableHead key={month} className="min-w-[100px]">
-                      {month}
-                    </TableHead>
-                  ))}
-                  <TableHead className="min-w-[120px]">Total Ano</TableHead>
-                  <TableHead className="w-[120px]">Ações</TableHead>
-                </TableRow>
+                <MonthHeader months={months} />
               </TableHeader>
               
               <TableBody>
