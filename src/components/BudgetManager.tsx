@@ -491,51 +491,25 @@ const BudgetManager: React.FC = () => {
       totals[month] = 0;
     });
     
-    const calculateItemTotals = (item: BudgetItemType): MonthlyValues => {
-      const result: MonthlyValues = { total: 0 };
-      
-      // Initialize with zeros
-      months.forEach(month => {
-        result[month] = 0;
-      });
-      
-      // Add this item's values
-      months.forEach(month => {
-        const value = item.values[month] || 0;
-        result[month] = value;
-      });
-      
-      // Add child values
-      item.children.forEach(child => {
-        const childTotals = calculateItemTotals(child);
-        months.forEach(month => {
-          result[month] += childTotals[month];
-        });
-        result.total = (result.total || 0) + (childTotals.total || 0);
-      });
-      
-      // Calculate total for this item
-      let itemTotal = 0;
-      months.forEach(month => {
-        itemTotal += result[month];
-      });
-      result.total = itemTotal;
-      
-      return result;
-    };
-    
-    // Calculate for each top-level item
+    // Only include top-level items in the total
     budget.forEach(item => {
-      const itemTotals = calculateItemTotals(item);
-      
-      // Apply positive/negative factor
-      const factor = item.isNegative ? -1 : 1;
-      
+      // For each month, add the value with the appropriate sign
       months.forEach(month => {
-        totals[month] = (totals[month] || 0) + factor * itemTotals[month];
+        const monthValue = item.values[month] || 0;
+        // Apply positive/negative factor based on isNegative
+        const valueWithSign = item.isNegative ? -monthValue : monthValue;
+        totals[month] = (totals[month] || 0) + valueWithSign;
       });
       
-      totals.total = (totals.total || 0) + factor * (itemTotals.total || 0);
+      // Calculate total for all months
+      let itemTotalForYear = 0;
+      months.forEach(month => {
+        itemTotalForYear += item.values[month] || 0;
+      });
+      
+      // Apply the sign for the total as well
+      const totalWithSign = item.isNegative ? -itemTotalForYear : itemTotalForYear;
+      totals.total = (totals.total || 0) + totalWithSign;
     });
     
     return totals;
