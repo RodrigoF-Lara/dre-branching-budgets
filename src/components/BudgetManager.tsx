@@ -33,63 +33,54 @@ const BudgetManager: React.FC = () => {
     return values;
   };
 
-  // Efeito para recalcular os valores das contas pai quando os filhos mudam
+  // Recalculate parent item values when children change
   useEffect(() => {
-    // Crie uma cópia profunda para evitar referências
-    const deepCopy = JSON.parse(JSON.stringify(budget)) as BudgetItemType[];
+    // Skip calculation if no items exist
+    if (budget.length === 0) return;
+
+    // Create a deep copy to avoid reference issues
+    const updatedBudget = JSON.parse(JSON.stringify(budget)) as BudgetItemType[];
     
-    // Função para calcular valores de pais com base nos filhos
-    const updateParentValues = (items: BudgetItemType[]): void => {
+    // Function to calculate parent values based on children
+    const calculateParentValues = (items: BudgetItemType[]): void => {
       for (const item of items) {
         if (item.children.length > 0) {
-          // Primeiro atualiza valores dos filhos recursivamente
-          updateParentValues(item.children);
+          // First, recursively update child values
+          calculateParentValues(item.children);
           
-          // Depois atualiza o pai com base nos valores dos filhos atualizados
+          // Initialize parent values with zeros
           const newValues: MonthlyValues = { total: 0 };
-          
-          // Inicializa com zeros
           months.forEach(month => {
             newValues[month] = 0;
           });
           
-          // Soma os valores dos filhos
+          // Sum up values from children
           item.children.forEach(child => {
             months.forEach(month => {
-              // Sempre adiciona valores absolutos, mas considera o tipo (receita/despesa)
               const childValue = child.values[month] || 0;
               
-              // Se pai e filho são do mesmo tipo (ambos receita ou ambos despesa), somamos
-              // Se são de tipos diferentes, subtraímos
-              if (item.isNegative === child.isNegative) {
-                newValues[month] = (newValues[month] || 0) + childValue;
-              } else {
-                newValues[month] = (newValues[month] || 0) - childValue;
-              }
+              // Apply sign based on item type
+              const signedValue = child.isNegative ? -childValue : childValue;
+              newValues[month] = (newValues[month] || 0) + signedValue;
             });
           });
           
-          // Calcula o total
+          // Calculate the total
           let total = 0;
           months.forEach(month => {
             total += newValues[month] || 0;
           });
           newValues.total = total;
           
-          // Atualiza valores do item pai
-          if (item.children.length > 0) {
-            item.values = newValues;
-          }
+          // Update parent values
+          item.values = newValues;
         }
       }
     };
     
-    // Somente atualizar se houver itens no orçamento
-    if (deepCopy.length > 0) {
-      updateParentValues(deepCopy);
-      setBudget(deepCopy);
-    }
-  }, [budget.length]); // Somente executar quando adicionar/remover itens
+    calculateParentValues(updatedBudget);
+    setBudget(updatedBudget);
+  }, [budget]); // This will run whenever budget changes
 
   const generateNewCode = (parentCode?: string): string => {
     // ... keep existing code (função de geração de códigos)
@@ -261,13 +252,13 @@ const BudgetManager: React.FC = () => {
     const updateValueInItems = (items: BudgetItemType[], itemId: string, month: string, newValue: number): boolean => {
       for (let i = 0; i < items.length; i++) {
         if (items[i].id === itemId) {
-          // Garantir que o valor seja sempre positivo
+          // Ensure positive value only
           const positiveValue = Math.abs(newValue);
           
           // Update the specific month
           items[i].values[month] = positiveValue;
           
-          // Recalculate the total
+          // Recalculate the total for this item
           let total = 0;
           months.forEach(m => {
             total += items[i].values[m] || 0;
@@ -514,21 +505,18 @@ const BudgetManager: React.FC = () => {
     
     // Only include top-level items in the total
     budget.forEach(item => {
-      // Para cada mês, adicione o valor com o sinal apropriado
+      // For each month, add the value with the appropriate sign
       months.forEach(month => {
         const monthValue = item.values[month] || 0;
-        // Aplicar fator positivo/negativo com base em isNegative
+        // Apply sign based on revenue/expense type
         const valueWithSign = item.isNegative ? -monthValue : monthValue;
         totals[month] = (totals[month] || 0) + valueWithSign;
       });
       
-      // Calcular o total para todos os meses
-      let itemTotalForYear = 0;
-      months.forEach(month => {
-        itemTotalForYear += item.values[month] || 0;
-      });
+      // Calculate total for the whole year
+      const itemTotalForYear = item.values.total || 0;
       
-      // Aplicar o sinal para o total também
+      // Apply sign to the total as well
       const totalWithSign = item.isNegative ? -itemTotalForYear : itemTotalForYear;
       totals.total = (totals.total || 0) + totalWithSign;
     });
