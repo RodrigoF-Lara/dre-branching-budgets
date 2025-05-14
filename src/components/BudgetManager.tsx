@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { BudgetItem as BudgetItemType, SubtotalConfig, MonthlyValues } from '../types/budget';
 import { BudgetItem } from './BudgetItem';
@@ -59,9 +60,14 @@ const BudgetManager: React.FC = () => {
             months.forEach(month => {
               const childValue = child.values[month] || 0;
               
-              // Apply sign based on item type
-              const signedValue = child.isNegative ? -childValue : childValue;
-              newValues[month] = (newValues[month] || 0) + signedValue;
+              // Apply sign based on child type - revenue adds, expense subtracts
+              if (child.type === "expense") {
+                // Expenses subtract from total
+                newValues[month] = (newValues[month] || 0) - childValue;
+              } else {
+                // Revenue adds to total
+                newValues[month] = (newValues[month] || 0) + childValue;
+              }
             });
           });
           
