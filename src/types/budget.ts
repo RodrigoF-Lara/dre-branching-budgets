@@ -1,4 +1,5 @@
 
+
 export interface BudgetItem {
   id: string;
   code: string;
@@ -6,7 +7,8 @@ export interface BudgetItem {
   values: MonthlyValues;
   children: BudgetItem[];
   isExpanded?: boolean;
-  isNegative?: boolean;
+  isNegative?: boolean;  // true para despesas, false para receitas
+  type: "revenue" | "expense";  // Adicionamos este campo para maior clareza
 }
 
 export interface MonthlyValues {
@@ -26,3 +28,4 @@ export interface SubtotalConfig {
   accountIds: string[];
   isVisible: boolean;
 }
+

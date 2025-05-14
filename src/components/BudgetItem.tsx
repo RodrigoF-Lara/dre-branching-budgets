@@ -68,10 +68,15 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
   };
 
   const handleValueChange = (month: string, e: React.ChangeEvent<HTMLInputElement>) => {
-    const numValue = parseFloat(e.target.value);
-    if (!isNaN(numValue)) {
-      onUpdateMonthlyValue(item.id, month, numValue);
+    // Converter para número e garantir que seja positivo
+    let numValue = parseFloat(e.target.value);
+    
+    // Se não for um número válido ou for negativo, não atualizar
+    if (isNaN(numValue) || numValue < 0) {
+      return;
     }
+    
+    onUpdateMonthlyValue(item.id, month, numValue);
   };
 
   // Get the sign indicator based on isNegative flag
@@ -89,7 +94,8 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
           "animate-fade-in transition-all",
           isOver ? "bg-budget-light bg-opacity-20" : "",
           isDragging ? "opacity-50" : "",
-          hasChildren ? "font-semibold" : ""
+          hasChildren ? "font-semibold" : "",
+          item.isNegative ? "text-red-700" : "text-green-700"
         )}
       >
         <TableCell className="p-2">
@@ -176,7 +182,10 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         
         {/* Monthly value inputs - somente editáveis se não tiver filhos */}
         {months.map(month => (
-          <TableCell key={month} className="p-1">
+          <TableCell 
+            key={month} 
+            className={cn("p-1", item.isNegative ? "text-red-700" : "text-green-700")}
+          >
             {hasChildren ? (
               <div className="text-right px-2">
                 {(item.values[month] || 0).toLocaleString('pt-BR', { 
@@ -187,6 +196,7 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
             ) : (
               <Input
                 type="number"
+                min="0"
                 value={item.values[month] || ''}
                 onChange={(e) => handleValueChange(month, e)}
                 className="text-right px-1 py-1 h-8"
@@ -196,7 +206,12 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         ))}
         
         {/* Total column */}
-        <TableCell className="p-2 text-right font-medium">
+        <TableCell 
+          className={cn(
+            "p-2 text-right font-medium",
+            item.isNegative ? "text-red-700" : "text-green-700"
+          )}
+        >
           {(item.values.total || 0).toLocaleString('pt-BR', { 
             style: 'currency', 
             currency: 'BRL' 
