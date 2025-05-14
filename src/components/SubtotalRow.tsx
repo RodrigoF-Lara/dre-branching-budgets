@@ -1,9 +1,9 @@
-
 import React from 'react';
 import { SubtotalConfig } from '../types/budget';
 import { TableRow, TableCell } from './ui/table';
 import { Button } from './ui/button';
 import { Eye, EyeOff, Trash } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface SubtotalRowProps {
   subtotal: SubtotalConfig;
@@ -30,9 +30,15 @@ export const SubtotalRow: React.FC<SubtotalRowProps> = ({
         </div>
       </TableCell>
       
-      {/* Monthly values */}
+      {/* Monthly values - can be positive or negative */}
       {months.map(month => (
-        <TableCell key={month} className="p-2 text-right">
+        <TableCell 
+          key={month} 
+          className={cn(
+            "p-2 text-right", 
+            calculateValue(month) < 0 ? "text-red-700" : "text-green-700"
+          )}
+        >
           {calculateValue(month).toLocaleString('pt-BR', { 
             style: 'currency', 
             currency: 'BRL' 
@@ -40,8 +46,13 @@ export const SubtotalRow: React.FC<SubtotalRowProps> = ({
         </TableCell>
       ))}
       
-      {/* Total */}
-      <TableCell className="p-2 text-right">
+      {/* Total - can be positive or negative */}
+      <TableCell 
+        className={cn(
+          "p-2 text-right",
+          totalValue < 0 ? "text-red-700" : "text-green-700"
+        )}
+      >
         {totalValue.toLocaleString('pt-BR', { 
           style: 'currency', 
           currency: 'BRL' 

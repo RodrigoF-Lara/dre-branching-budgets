@@ -79,8 +79,8 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
     onUpdateMonthlyValue(item.id, month, numValue);
   };
 
-  // Get the sign indicator based on isNegative flag
-  const signIndicator = item.isNegative ? (
+  // Get the sign indicator based on item type
+  const typeIndicator = item.type === "expense" ? (
     <ArrowDown size={16} className="text-red-500" />
   ) : (
     <ArrowUp size={16} className="text-green-500" />
@@ -95,7 +95,7 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
           isOver ? "bg-budget-light bg-opacity-20" : "",
           isDragging ? "opacity-50" : "",
           hasChildren ? "font-semibold" : "",
-          item.isNegative ? "text-red-700" : "text-green-700"
+          item.type === "expense" ? "text-red-700" : "text-green-700"
         )}
       >
         <TableCell className="p-2">
@@ -155,9 +155,9 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
             <button 
               onClick={() => onToggleNegative(item.id)}
               className="mr-2"
-              title={item.isNegative ? "Despesa (clique para alterar)" : "Receita (clique para alterar)"}
+              title={item.type === "expense" ? "Despesa (clique para alterar)" : "Receita (clique para alterar)"}
             >
-              {signIndicator}
+              {typeIndicator}
             </button>
             
             {isEditing ? (
@@ -184,11 +184,11 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         {months.map(month => (
           <TableCell 
             key={month} 
-            className={cn("p-1", item.isNegative ? "text-red-700" : "text-green-700")}
+            className={cn("p-1", item.type === "expense" ? "text-red-700" : "text-green-700")}
           >
             {hasChildren ? (
               <div className="text-right px-2">
-                {(item.values[month] || 0).toLocaleString('pt-BR', { 
+                {Math.abs(item.values[month] || 0).toLocaleString('pt-BR', { 
                   style: 'currency', 
                   currency: 'BRL' 
                 })}
@@ -209,10 +209,10 @@ export const BudgetItem: React.FC<BudgetItemProps> = ({
         <TableCell 
           className={cn(
             "p-2 text-right font-medium",
-            item.isNegative ? "text-red-700" : "text-green-700"
+            item.type === "expense" ? "text-red-700" : "text-green-700"
           )}
         >
-          {(item.values.total || 0).toLocaleString('pt-BR', { 
+          {Math.abs(item.values.total || 0).toLocaleString('pt-BR', { 
             style: 'currency', 
             currency: 'BRL' 
           })}

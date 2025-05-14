@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { BudgetItem as BudgetItemType, SubtotalConfig, MonthlyValues } from '../types/budget';
 import { BudgetItem } from './BudgetItem';
@@ -316,9 +315,10 @@ const BudgetManager: React.FC = () => {
     const toggleNegativeInItems = (items: BudgetItemType[], itemId: string): boolean => {
       for (let i = 0; i < items.length; i++) {
         if (items[i].id === itemId) {
-          items[i].isNegative = !items[i].isNegative;
-          // Atualiza o tipo também
-          items[i].type = items[i].isNegative ? "expense" : "revenue";
+          // Toggle the type directly
+          items[i].type = items[i].type === "expense" ? "revenue" : "expense";
+          // Keep isNegative in sync with type
+          items[i].isNegative = items[i].type === "expense";
           return true;
         }
         
