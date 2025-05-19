@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { SubtotalConfig } from '../types/budget';
 import { TableRow, TableCell } from './ui/table';
@@ -30,7 +31,7 @@ export const SubtotalRow: React.FC<SubtotalRowProps> = ({
         </div>
       </TableCell>
       
-      {/* Monthly values - can be positive or negative */}
+      {/* Monthly values - can be positive or negative for subtotals */}
       {months.map(month => (
         <TableCell 
           key={month} 
@@ -46,7 +47,7 @@ export const SubtotalRow: React.FC<SubtotalRowProps> = ({
         </TableCell>
       ))}
       
-      {/* Total - can be positive or negative */}
+      {/* Total - can be positive or negative for subtotals */}
       <TableCell 
         className={cn(
           "p-2 text-right",

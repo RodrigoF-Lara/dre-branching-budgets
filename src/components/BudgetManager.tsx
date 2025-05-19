@@ -57,16 +57,8 @@ const BudgetManager: React.FC = () => {
           // Sum up values from children
           item.children.forEach(child => {
             months.forEach(month => {
-              const childValue = child.values[month] || 0;
-              
-              // Apply sign based on child type - revenue adds, expense subtracts
-              if (child.type === "expense") {
-                // Expenses subtract from total
-                newValues[month] = (newValues[month] || 0) - childValue;
-              } else {
-                // Revenue adds to total
-                newValues[month] = (newValues[month] || 0) + childValue;
-              }
+              // Always add absolute values (no sign display)
+              newValues[month] = (newValues[month] || 0) + (child.values[month] || 0);
             });
           });
           
@@ -486,21 +478,21 @@ const BudgetManager: React.FC = () => {
     });
   };
 
-  // Calculate subtotal value
+  // Calculate subtotal value - need to adjust to properly subtract expenses
   const calculateSubtotal = (subtotal: SubtotalConfig, month?: string): number => {
     return subtotal.accountIds.reduce((sum, accountId) => {
       const item = findItemById(accountId);
       if (!item) return sum;
       
-      // Pegar o valor absoluto
-      const value = month ? item.values[month] || 0 : (item.values.total || 0);
+      // Get the absolute value
+      const value = month ? Math.abs(item.values[month] || 0) : Math.abs(item.values.total || 0);
       
-      // Aplicar o sinal baseado no tipo (receita ou despesa)
-      return sum + (item.isNegative ? -value : value);
+      // Apply the sign based on type (revenue adds, expense subtracts)
+      return sum + (item.type === "expense" ? -value : value);
     }, 0);
   };
 
-  // Calculate total budget for all months
+  // Calculate total budget for all months - updated to properly handle expenses
   const calculateBudgetTotals = () => {
     const totals: MonthlyValues = { total: 0 };
     
@@ -511,20 +503,24 @@ const BudgetManager: React.FC = () => {
     
     // Only include top-level items in the total
     budget.forEach(item => {
-      // For each month, add the value with the appropriate sign
+      // For each month, add or subtract based on expense or revenue
       months.forEach(month => {
-        const monthValue = item.values[month] || 0;
-        // Apply sign based on revenue/expense type
-        const valueWithSign = item.isNegative ? -monthValue : monthValue;
-        totals[month] = (totals[month] || 0) + valueWithSign;
+        const monthValue = Math.abs(item.values[month] || 0);
+        // Apply sign based on revenue/expense type for totals
+        if (item.type === "expense") {
+          totals[month] = (totals[month] || 0) - monthValue;
+        } else {
+          totals[month] = (totals[month] || 0) + monthValue;
+        }
       });
       
-      // Calculate total for the whole year
-      const itemTotalForYear = item.values.total || 0;
-      
-      // Apply sign to the total as well
-      const totalWithSign = item.isNegative ? -itemTotalForYear : itemTotalForYear;
-      totals.total = (totals.total || 0) + totalWithSign;
+      // For the year total
+      const itemTotalForYear = Math.abs(item.values.total || 0);
+      if (item.type === "expense") {
+        totals.total = (totals.total || 0) - itemTotalForYear;
+      } else {
+        totals.total = (totals.total || 0) + itemTotalForYear;
+      }
     });
     
     return totals;
